@@ -1573,7 +1573,13 @@ function navigateToSection(tabId) {
 /* ── Whisper 음성인식 시스템 ── */
 async function initWhisper() {
   try {
-    whisperMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    whisperMediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
     whisperAudioContext = new (window.AudioContext || window.webkitAudioContext)();
     whisperAnalyser = whisperAudioContext.createAnalyser();
     var source = whisperAudioContext.createMediaStreamSource(whisperMediaStream);
