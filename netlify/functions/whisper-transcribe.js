@@ -84,6 +84,13 @@ exports.handler = async (event) => {
       `ko\r\n`
     );
 
+    // prompt part — Whisper 환각 방지, 맥락 유도
+    formParts.push(
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
+      `차의과학대학교 경영학전공 상담 대화입니다. 학생이 교수님, 커리큘럼, 취업, AI, 복수전공 등에 대해 질문합니다.\r\n`
+    );
+
     formParts.push(`--${boundary}--\r\n`);
 
     // Buffer 합치기
@@ -112,12 +119,38 @@ exports.handler = async (event) => {
     }
 
     const result = await response.json();
-    console.log('[Whisper] 전사 결과:', result.text);
+    const rawText = (result.text || '').trim();
+    console.log('[Whisper] 전사 결과:', rawText);
+
+    // Whisper 환각(hallucination) 필터링
+    const HALLUCINATION_PATTERNS = [
+      /^시청해\s?주셔서\s?감사합니다/,
+      /^구독과?\s?(좋아요|댓글)/,
+      /^MBC|^KBS|^SBS|^YTN|^JTBC/,
+      /뉴스.{0,5}입니다\.?$/,
+      /^감사합니다\.?$/,
+      /^고맙습니다\.?$/,
+      /^수고하셨습니다\.?$/,
+      /^고마워요\.?$/,
+      /^Thank you/i,
+      /^Subscribe/i,
+      /^\s*$/,
+    ];
+
+    const isHallucination = HALLUCINATION_PATTERNS.some(p => p.test(rawText));
+    if (isHallucination) {
+      console.log('[Whisper] 환각 필터링:', rawText);
+      return {
+        statusCode: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: '', filtered: true }),
+      };
+    }
 
     return {
       statusCode: 200,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: result.text || '' }),
+      body: JSON.stringify({ text: rawText }),
     };
 
   } catch (err) {
