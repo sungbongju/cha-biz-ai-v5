@@ -1683,13 +1683,18 @@ async function sendToWhisper(blob) {
   setVoiceState('thinking');
   taskInput.placeholder = '처리 중...';
 
-  var formData = new FormData();
-  formData.append('file', blob, 'audio.webm');
-
   try {
+    // Blob → base64 변환
+    var arrayBuffer = await blob.arrayBuffer();
+    var uint8 = new Uint8Array(arrayBuffer);
+    var binary = '';
+    for (var i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+    var base64 = btoa(binary);
+
     var res = await fetch('/.netlify/functions/whisper-transcribe', {
       method: 'POST',
-      body: formData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audio: base64, mimeType: blob.type || 'audio/webm' })
     });
     var data = await res.json();
     console.log('[Whisper] 전사 결과:', data.text);
