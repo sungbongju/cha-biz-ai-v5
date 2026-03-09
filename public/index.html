@@ -1719,8 +1719,10 @@ function startVAD() {
   function detect() {
     if (whisperIsRecording || !autoListenEnabled || !sessionInfo) return;
     var volume = getVolume();
-    if (volume > WHISPER_VOICE_THRESHOLD) {
-      console.log('[Whisper] 음성 감지 (volume=' + volume.toFixed(4) + ') → 녹음 시작');
+    // 아바타 발화 중에는 높은 임계값 (스피커 음성 무시, 사용자 직접 발화만 감지)
+    var threshold = isSpeaking ? 0.15 : WHISPER_VOICE_THRESHOLD;
+    if (volume > threshold) {
+      console.log('[Whisper] 음성 감지 (volume=' + volume.toFixed(4) + ', threshold=' + threshold + ', speaking=' + isSpeaking + ') → 녹음 시작');
       // 아바타 발화 중이면 interrupt
       if (isSpeaking) {
         console.log('[Whisper] 아바타 발화 중 음성 감지 → interrupt');
@@ -1735,6 +1737,13 @@ function startVAD() {
     whisperVadRafId = requestAnimationFrame(detect);
   }
   detect();
+}
+
+// 아바타 발화 시작 시 interrupt용 VAD도 함께 시작
+function startInterruptVAD() {
+  if (!whisperAnalyser || !autoListenEnabled || !sessionInfo) return;
+  console.log('[Whisper] interrupt VAD 시작 (발화 중 음성 감지용)');
+  startVAD();
 }
 
 function stopVAD() {
@@ -1754,7 +1763,7 @@ function onSpeakingDone(source) {
   if (!isSpeaking) { console.log('[Avatar] onSpeakingDone 무시 — isSpeaking=false (' + source + ')'); return; }
   // 발화 시작 후 2초 이내면 무시 (premature 이벤트 방지)
   var elapsed = Date.now() - _speakStartedAt;
-  if (source !== 'fallback' && source !== 'greeting-fallback' && elapsed < 2000) {
+  if (source !== 'fallback' && source !== 'greeting-fallback' && elapsed < 1000) {
     console.log('[Avatar] onSpeakingDone 무시 — 너무 빠름 (' + elapsed + 'ms, ' + source + ')');
     return;
   }
@@ -1763,7 +1772,10 @@ function onSpeakingDone(source) {
   console.log('[Avatar] 발화 완료 감지 (' + source + ', ' + elapsed + 'ms) → autoListen=' + autoListenEnabled + ', session=' + !!sessionInfo);
   if (autoListenEnabled && sessionInfo) {
     setVoiceState('listening');
-    startListening();
+    // 아바타 스피커 잔여 음성이 마이크에 유입되지 않도록 딜레이 후 VAD 시작
+    setTimeout(function() {
+      if (!isSpeaking && !isProcessing) startListening();
+    }, 800);
   } else {
     setVoiceState('idle');
     taskInput.placeholder = '텍스트로 질문하세요';
@@ -1841,6 +1853,9 @@ async function processUserInput(text) {
     text: ttsText,
     task_type: 'repeat'
   });
+
+  // 발화 중 interrupt 감지용 VAD 시작 (높은 임계값)
+  startInterruptVAD();
 
   // 발화 완료 타이머 (ActiveSpeakersChanged speakers=0 이벤트가 오지 않으므로 타이머가 주요 감지)
   // 한국어 TTS ≈ 초당 7글자 + 1.5초 여유
@@ -1962,6 +1977,9 @@ async function startSession() {
       text: greetingTTS,
       task_type: 'repeat'
     });
+
+    // 인사말 중 interrupt 감지용 VAD 시작
+    startInterruptVAD();
 
     // 인사말 발화 완료 타이머 (한국어 TTS ≈ 초당 7글자 + 1.5초 여유)
     var greetFallbackMs = Math.max(3000, (greetingTTS.length / 7) * 1000 + 1500);
