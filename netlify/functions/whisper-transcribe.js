@@ -19,6 +19,8 @@ const HALLUCINATION_PATTERNS = [
   /^수고하셨습니다\.?$/,
   /^고마워요\.?$/,
   /^네,?\s*끝났습니다/,
+  /^대학\s*상담/,
+  /학생이\s*교수님/,
   /^Thank you/i,
   /^Subscribe/i,
   /^\s*$/,
@@ -95,11 +97,11 @@ exports.handler = async (event) => {
       'utf-8'
     ));
 
-    // prompt — 맥락 유도로 환각 감소
+    // prompt — 짧게 (환각 방지 + 반복 방지)
     formParts.push(Buffer.from(
       `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
-      `차의과학대학교 경영학전공 상담 대화입니다. 학생이 교수님, 커리큘럼, 취업률, AI, 복수전공 등에 대해 질문합니다.\r\n`,
+      `대학 상담 질문\r\n`,
       'utf-8'
     ));
 
